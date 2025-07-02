@@ -3,6 +3,8 @@
 #set text(size: 0.7em)
 
 #show: codly-init.with()
+// No line numbers (for nice digital copy-pasting)
+#codly(number-format: none)
 
 = Preamble
 ```cpp
