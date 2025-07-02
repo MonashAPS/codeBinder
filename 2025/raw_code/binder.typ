@@ -4,7 +4,7 @@
 
 #show: codly-init.with()
 // No line numbers (for nice digital copy-pasting)
-#codly(number-format: none)
+#codly(number-format: none, display-name: false)
 
 = Preamble
 ```cpp
