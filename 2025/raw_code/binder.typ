@@ -551,46 +551,78 @@ struct LazyUpdateTree {
 	Value identity = LLONG_MIN;
 	Value def = 0;
 	Update idUpdate = 0;
-	Value binop(Value a, Value b) {return max(a, b);}
-	Value applyUpdate(Update a, Value u, int l, int r) {return u + a;}
-	Update mergeUpdate(Update old, Update nw) {return old + nw;}
+	Value binop(Value a, Value b) { return max(a, b); }
+	Value applyUpdate(Update a, Value u, int l, int r) { return u + a; }
+	Update mergeUpdate(Update old, Update nw) { return old + nw; }
 	vector<Value> arr;
 	vector<Update> lazy;
 	int size;
-	LazyUpdateTree(int n) : arr(4*n + 2,def), lazy(4*n + 2, idUpdate), size(n) {};
-	void push(int cur,int l, int r) {
+	LazyUpdateTree(int n) : arr(4 * n + 2, def), lazy(4 * n + 2, idUpdate), size(n) {};
+	void push(int cur, int l, int r) {
 		if (l != r) {
-			int mid = midpoint(l,r);
-			lazy[cur*2] = mergeUpdate(lazy[cur * 2], lazy[cur]);
-			arr[cur * 2] = applyUpdate(lazy[cur],arr[cur*2],l,mid);
-			lazy[cur*2 + 1] = mergeUpdate(lazy[cur * 2 + 1], lazy[cur]);
-			arr[cur * 2 + 1] = applyUpdate(lazy[cur],arr[cur*2 + 1],mid + 1,r);
+			int mid = midpoint(l, r);
+			update(2 * cur, l, mid,lazy[cur],l,mid);
+			update(2 * cur + 1, mid + 1, r, lazy[cur],mid + 1, r);
 		}
 		lazy[cur] = idUpdate;
 	}
-	void update(int cur, int ql,int qr, Update u, int l, int r) {
+	void update(int cur, int ql, int qr, Update u, int l, int r) {
 		if (l == ql and r == qr) {
-			lazy[cur] = mergeUpdate(lazy[cur],u);
-			arr[cur] = applyUpdate(u,arr[cur],l,r);
+			lazy[cur] = mergeUpdate(lazy[cur], u);
+			arr[cur] = applyUpdate(u, arr[cur], l, r);
 			return;
 		}
 		push(cur, l, r);
 		int mid = midpoint(l, r);
-		if (ql <= mid) update(2*cur,ql,min(mid,qr),u,l,mid);
-		if (qr > mid) update(2*cur + 1,max(mid + 1,ql),qr,u,mid+1,r);
-		arr[cur] = binop(arr[2*cur],arr[2*cur + 1]);
+		if (ql <= mid) update(2 * cur, ql, min(mid, qr), u, l, mid);
+		if (qr > mid) update(2 * cur + 1, max(mid + 1, ql), qr, u, mid + 1, r);
+		arr[cur] = binop(arr[2 * cur], arr[2 * cur + 1]);
 	}
-	void update(int ql,int qr, Update u) {update(1,ql,qr,u,0,size-1);}
+	void update(int ql, int qr, Update u) { update(1, ql, qr, u, 0, size - 1); }
 	Value query(int cur, int ql, int qr, int l, int r) {
 		if (l == ql and r == qr) return arr[cur];
-		push(cur,l,r);
-		int mid = midpoint(l,r);
+		push(cur, l, r);
+		int mid = midpoint(l, r);
 		Value val = identity;
-		if (ql <= mid) val = binop(val, query(2*cur,ql,min(mid,qr),l,mid));
-		if (qr > mid) val = binop(val,query(2*cur + 1,max(mid + 1,ql),qr,mid+1,r));
+		if (ql <= mid) val = binop(val, query(2 * cur, ql, min(mid, qr), l, mid));
+		if (qr > mid) val = binop(val, query(2 * cur + 1, max(mid + 1, ql), qr, mid + 1, r));
 		return val;
 	}
-	Value query(int ql, int qr) {return query(1,ql,qr,0,size - 1);}
+	Value query(int ql, int qr) { return query(1, ql, qr, 0, size - 1); }
+};
+```
+
+== Lazy Create Segment Tree
+```cpp
+struct LazyCreateNode {
+	using Value = int;
+	static const Value identity = 0;
+	Value binop(Value a, Value b) { return a + b; }
+	Value val = identity;
+	LazyCreateNode *lt = NULL, *rt = NULL;
+	LazyCreateNode() {};
+	void create_children() {
+		if (lt != NULL) return;
+		lt = new LazyCreateNode();
+		rt = new LazyCreateNode();
+	}
+	void update(int i, Value v, int l, int r) {
+		if (l == r) { val = v; return; }
+		create_children();
+		int mid = midpoint(l, r);
+		if (i <= mid) lt->update(i,v,l,mid);
+		else rt->update(i,v,mid+1,r);
+		val = binop(lt->val,rt->val);
+	}
+	Value query(int ql, int qr, int l, int r) {
+		if (l == ql and r == qr) return val;
+		create_children();
+		int mid = midpoint(l, r);
+		Value val = identity;
+		if (ql <= mid) val = lt->query(ql,min(mid, qr), l, mid);
+		if (qr > mid) val = binop(val, rt->query(max(mid + 1, ql), qr, mid + 1, r));
+		return val;
+	}
 };
 ```
 
