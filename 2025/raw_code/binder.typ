@@ -627,43 +627,93 @@ struct LazyCreateNode {
 ```
 
 = DP Optimisations
-== Convex Hull Trick
-From a set of linear functions, finds the minimum value at a point.
-- Adding Equation - Amortized $cal(O)(1)$
-- Finding minimum - $cal(O)(log n)$
-Requires gradients to be increasing when inserted. Can use Li-Chao tree for online.
-
-To find maximum, flip equations on insert, and flip answer.
+== Line Container
+Container where you can add lines of the form kx+m, and query maximum values at points x.
+Useful for dynamic programming convex hull trick. $cal(O)(log n)$.
 ```cpp
-// Can use double
-typedef int F;
-typedef complex<F> P;
-F dot(P a, P b) {
-    return (conj(a) * b).real();
-}
-F cross(P a, P b) {
-    return (conj(a) * b).imag();
-}
-struct Cht {
-    vector<P> hull, vecs;
-		// y= k x + b
-    void add_line(F k, F b) {
-        P nw = {k, b};
-        while(!vecs.empty() && dot(vecs.back(), nw - hull.back()) < 0) {
-            hull.pop_back();
-            vecs.pop_back();
-        }
-        if(!hull.empty()) {
-            vecs.push_back(P(0,1) * (nw - hull.back()));
-        }
-        hull.push_back(nw);
-    }
-    F get(F x) {
-        P query = {x, 1};
-        auto it = lower_bound(vecs.begin(), vecs.end(), query, [](F a, F b) {
-            return cross(a, b) > 0;
-        });
-        return dot(query, hull[it - vecs.begin()]);
-    }
+struct Line {
+	mutable ll k, m, p;
+	bool operator<(const Line& o) const { return k < o.k; }
+	bool operator<(ll x) const { return p < x; }
+};
+
+struct LineContainer : multiset<Line, less<>> {
+	// (for doubles, use inf = 1/.0, div(a,b) = a/b)
+	static const ll inf = LLONG_MAX;
+	ll div(ll a, ll b) { // floored division
+		return a / b - ((a ^ b) < 0 && a % b); }
+	bool isect(iterator x, iterator y) {
+		if (y == end()) return x->p = inf, 0;
+		if (x->k == y->k) x->p = x->m > y->m ? inf : -inf;
+		else x->p = div(y->m - x->m, x->k - y->k);
+		return x->p >= y->p;
+	}
+	void add(ll k, ll m) {
+		auto z = insert({k, m, 0}), y = z++, x = y;
+		while (isect(y, z)) z = erase(z);
+		if (x != begin() && isect(--x, y)) isect(x, y = erase(y));
+		while ((y = x) != begin() && (--x)->p >= y->p)
+			isect(x, erase(y));
+	}
+	ll query(ll x) {
+		assert(!empty());
+		auto l = *lower_bound(x);
+		return l.k * x + l.m;
+	}
+};
+```
+
+= Flow
+== Push Relabel
+// To get flow, look at only positive values.
+$cal(O)(V^3)$
+```cpp
+struct PushRelabel {
+	struct Edge {
+		int dest, back;
+		ll f, c;
+	};
+	vector<vector<Edge>> g;
+	vector<ll> ec;
+	vector<Edge*> cur;
+	vector<vi> hs; vi H;
+	PushRelabel(int n) : g(n), ec(n), cur(n), hs(2*n), H(n) {}
+
+	void addEdge(int s, int t, ll cap, ll rcap=0) {
+		if (s == t) return;
+		g[s].push_back({t, sz(g[t]), 0, cap});
+		g[t].push_back({s, sz(g[s])-1, 0, rcap});
+	}
+
+	void addFlow(Edge& e, ll f) {
+		Edge &back = g[e.dest][e.back];
+		if (!ec[e.dest] && f) hs[H[e.dest]].push_back(e.dest);
+		e.f += f; e.c -= f; ec[e.dest] += f;
+		back.f -= f; back.c += f; ec[back.dest] -= f;
+	}
+	ll calc(int s, int t) {
+		int v = sz(g); H[s] = v; ec[t] = 1;
+		vi co(2*v); co[0] = v-1;
+		rep(i,0,v) cur[i] = g[i].data();
+		for (Edge& e : g[s]) addFlow(e, e.c);
+
+		for (int hi = 0;;) {
+			while (hs[hi].empty()) if (!hi--) return -ec[s];
+			int u = hs[hi].back(); hs[hi].pop_back();
+			while (ec[u] > 0)  // discharge u
+				if (cur[u] == g[u].data() + sz(g[u])) {
+					H[u] = 1e9;
+					for (Edge& e : g[u]) if (e.c && H[u] > H[e.dest]+1)
+						H[u] = H[e.dest]+1, cur[u] = &e;
+					if (++co[H[u]], !--co[hi] && hi < v)
+						rep(i,0,v) if (hi < H[i] && H[i] < v)
+							--co[H[i]], H[i] = v + 1;
+					hi = H[u];
+				} else if (cur[u]->c && H[u] == H[cur[u]->dest]+1)
+					addFlow(*cur[u], min(ec[u], cur[u]->c));
+				else ++cur[u];
+		}
+	}
+	bool leftOfMinCut(int a) { return H[a] >= sz(g); }
 };
 ```
