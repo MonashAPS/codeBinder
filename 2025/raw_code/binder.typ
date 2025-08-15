@@ -366,68 +366,83 @@ vector<int> z_algo(const string& s) {
 ```
 
 == Aho-Curasick
-Creates a string automaton for matching a dictionary of patterns. We hit a success state for each match of a pattern. Linear time on the total length of all patterns.
+Aho-Corasick automaton, used for multiple pattern matching.
+Initialize with AhoCorasick ac(patterns); the automaton start node will be at index 0.
+find(word) returns for each position the index of the longest word that ends there, or -1 if none.
+findAll($-$, word) finds all words (up to $N sqrt(N)$ many if no duplicate patterns)
+that start at each position (shortest first).
+Duplicate patterns are allowed; empty patterns are not.
+To find the longest words that start at each position, reverse all input.
+For large alphabets, split each symbol into chunks, with sentinel bits for symbol boundaries.
+Time: construction takes $O(26N)$, where $N =$ sum of length of patterns.
+find(x) is $O(N)$, where N = length of x. findAll is $O(N M)$.
 
 ```cpp
-struct Node {
-	int par;
-	char c;
-	map<char, int> next;
-	int link = -1;
-	bool terminal = false;
-	Node(int par, char c) : par(par), c(c) {}
+struct AhoCorasick {
+	enum {alpha = 26, first = 'A'}; // change this!
+	struct Node {
+		// (nmatches is optional)
+		int back, next[alpha], start = -1, end = -1, nmatches = 0;
+		Node(int v) { memset(next, v, sizeof(next)); }
+	};
+	vector<Node> N;
+	vector<int> backp;
+	void insert(string& s, int j) {
+		assert(!s.empty());
+		int n = 0;
+		for (char c : s) {
+			int& m = N[n].next[c - first];
+			if (m == -1) { n = m = N.size(); N.emplace_back(-1); }
+			else n = m;
+		}
+		if (N[n].end == -1) N[n].start = j;
+		backp.push_back(N[n].end);
+		N[n].end = j;
+		N[n].nmatches++;
+	}
+	AhoCorasick(vector<string>& pat) : N(1, -1) {
+		REP(i,0,pat.size()) insert(pat[i], i);
+		N[0].back = N.size();
+		N.emplace_back(0);
+		queue<int> q;
+		for (q.push(0); !q.empty(); q.pop()) {
+			int n = q.front(), prev = N[n].back;
+			REP(i,0,alpha) {
+				int &ed = N[n].next[i], y = N[prev].next[i];
+				if (ed == -1) ed = y;
+				else {
+					N[ed].back = y;
+					(N[ed].end == -1 ? N[ed].end : backp[N[ed].start])
+						= N[y].end;
+					N[ed].nmatches += N[y].nmatches;
+					q.push(ed);
+				}
+			}
+		}
+	}
+	vector<int> find(string word) {
+		int n = 0;
+		vector<int> res; // ll count = 0;
+		for (char c : word) {
+			n = N[n].next[c - first];
+			res.push_back(N[n].end);
+			// count += N[n].nmatches;
+		}
+		return res;
+	}
+	vector<vector<int>> findAll(vector<string>& pat, string word) {
+		vector<int> r = find(word);
+		vector<vector<int>> res(word.size());
+		REP(i,0,word.size()) {
+			int ind = r[i];
+			while (ind != -1) {
+				res[i - pat[ind].size() + 1].push_back(ind);
+				ind = backp[ind];
+			}
+		}
+		return res;
+	}
 };
-vector<Node> nodes;
-int new_node(int par, char c) {
-	Node node = Node(par, c);
-	nodes.push_back(node);
-	return nodes.size() - 1;
-}
-int aho_curasick(const vector<string>& words) {
-	// Root
-	new_node(-1, '!');
-	// Trie construction
-	for (const auto& word : words) {
-		int cur = 0;
-		REP(i, 0, word.size()) {
-			char c = word[i];
-			if (nodes[cur].next.find(c) == nodes[cur].next.end()) {
-				int nw = new_node(cur, c);
-				nodes[cur].next[c] = nw;
-			}
-			cur = nodes[cur].next[c];
-		}
-		nodes[cur].terminal = true;
-	}
-	// Initialize root.
-	deque<int> q;
-	nodes[0].link = 0;
-	for (char c = 'a'; c <= 'z'; c++) {
-		if (nodes[0].next.find(c) == nodes[0].next.end()) {
-			nodes[0].next[c] = 0;
-		} else {
-			q.push_back(nodes[0].next[c]);
-		}
-	}
-	// BFS - initialise suffix links and failiure states.
-	while (!q.empty()) {
-		int i = q.front();
-		q.pop_front();
-		if (nodes[i].par == 0) {
-			nodes[i].link = 0;
-		} else {
-			nodes[i].link = nodes[nodes[nodes[i].par].link].next[nodes[i].c];
-		}
-		for (char c = 'a'; c <= 'z'; c++) {
-			if (nodes[i].next.find(c) == nodes[i].next.end()) {
-				nodes[i].next[c] = nodes[nodes[i].link].next[c];
-			} else {
-				q.push_back(nodes[i].next[c]);
-			}
-		}
-	}
-	return 0;
-}
 ```
 
 
@@ -662,7 +677,85 @@ struct LineContainer : multiset<Line, less<>> {
 	}
 };
 ```
+== Quadrangle Inequality
+$C(a,c) + C(b,d) <= C(a,d) + C(b, c)$
 
+"Wider gets worser faster"
+
+Patterns:
++ Show that $C(i,j) + C(i+1,j+1) <= C(i,j+1) + C(i+1,j)$
++ $C(i,j) = sum_(k = i)^j w_k$
++ $C(i,j) = g(x(j) - x(i))$ where $x$ is increasing and $g$ is convex.
++ $C(i,j) = min(A[i], B[j])$ or (max)
++ $C(i,j) = max(0, x_j - x_i - Delta)$ where $Delta > 0$ 
+// TODO double check above.
+== Divide and Conquer
+For recurrences of the form:
+$ "dp"(i,j) = min_(0 <= k <= k) "dp"(i - 1, k - 1) + C(k,j) $
+
+where the splitting point increases as j increases. Quadrangle
+is sufficient.
+```cpp
+// Inclusive, inclusive, 0-indexed
+auto cost = [&](int i, int j) -> double {
+	return 0;
+};
+vector<double> dpbefore(n, 1./0.);
+vector<double> dpafter(n, 1./0.);
+auto compute = [&](const auto& self, int l, int r, int optl, int optr) -> void {
+	if (l > r) return;
+	int mid = midpoint(l,r);
+	pair<double, int> best = {1./0., -1};
+	REP(k, optl, min(mid,optr) + 1) {
+		double cur = (k ? dpbefore[k - 1] : 0) + cost(k, mid);
+		best = min(best, {cur,k});
+	}
+	dpafter[mid] = best.first;
+	self(self, l, mid - 1, optl, best.second);
+	self(self, mid + 1, r, best.second, optr);
+};
+REP(a,0,k) {
+	compute(compute, 0, n - 1, 0, n - 1);
+	swap(dpbefore, dpafter);
+}
+cout << dpbefore.back();
+```
+== Knuth's Optimisation
+#let dp = "dp"
+Any fixed offsets from k work.
+$dp(i,j) = min_(i<=k<j)(dp(i,k) + dp(k + 1,j)) + C(i,j)$
+
+$"opt"(i,j) = "optimal selection of k"$
+Requires that: $"opt"(i, j - 1) <= "opt"(i,j) <= "opt"(i+1,j)$.
+
+Following is sufficient:
++ $C(b,c) <= C(a,d)$
++ Quadrangle Inequality
+
+```cpp
+int dp[N][N], opt[N][N];
+auto C = [&](int i, int j) {
+	// Implement cost function C.
+};
+for (int i = 0; i < N; i++) {
+	opt[i][i] = i;
+	// Initialize dp[i][i] according to the problem
+}
+for (int i = N-2; i >= 0; i--) {
+	for (int j = i+1; j < N; j++) {
+		int mn = INT_MAX;
+		int cost = C(i, j);
+		for (int k = opt[i][j-1]; k <= min(j-1, opt[i+1][j]); k++) {
+			if (mn >= dp[i][k] + dp[k+1][j] + cost) {
+				opt[i][j] = k; 
+				mn = dp[i][k] + dp[k+1][j] + cost; 
+			}
+		}
+		dp[i][j] = mn; 
+	}
+}
+return dp[0][N-1];
+```
 = Flow
 == Push Relabel
 // To get flow, look at only positive values.
